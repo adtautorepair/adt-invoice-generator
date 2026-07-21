@@ -67,6 +67,10 @@
   .desc-wrap input{width:100%;padding-right:30px}
   .ai-mini{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--blue2);padding:2px;display:inline-flex;line-height:1}
   .ai-mini:hover{color:var(--blue)}.ai-mini:disabled{opacity:.4;cursor:default}
+  .ai-busy{border-color:var(--blue2)!important;color:var(--blue2)!important;animation:aipulse 1.1s ease-in-out infinite}
+  @keyframes aipulse{0%,100%{box-shadow:0 0 0 0 rgba(20,69,158,.28)}50%{box-shadow:0 0 0 4px rgba(20,69,158,.10)}}
+  .spin{display:inline-flex;animation:spin360 .9s linear infinite}
+  @keyframes spin360{to{transform:rotate(360deg)}}
   .num{text-align:right}
   .del{background:#fbeaea;color:#b3261e;border:none;border-radius:5px;padding:6px 9px;cursor:pointer;font-weight:700;display:inline-flex}
 
@@ -229,7 +233,7 @@
   </div>
 
   <div class="card no-print">
-    <h2>Parts &amp; Labor</h2>
+    <h2>Parts &amp; Labour</h2>
     <table class="items">
       <thead><tr>
         <th style="width:130px">Type</th><th>Description</th>
@@ -241,13 +245,13 @@
     </table>
     <div class="row-actions" style="align-items:center">
       <button class="btn ghost sm" onclick="addRow('Part')">Add part</button>
-      <button class="btn ghost sm" onclick="addRow('Labor (flat)')">Add labor</button>
+      <button class="btn ghost sm" onclick="addRow('Labor (flat)')">Add labour</button>
       <span style="margin-left:8px;display:inline-flex;gap:6px;align-items:center">
         <select id="quickService" style="width:auto;min-width:210px"></select>
         <button class="btn alt sm" onclick="addQuickService()">Add service</button>
       </span>
     </div>
-    <div class="hint">For labor, pick <b>Labor (flat)</b> for a lump sum or <b>Labor (hourly)</b> to bill hours × your shop rate. Manage the <b>service list</b> in Settings.</div>
+    <div class="hint"><b>Part</b> = a physical item you charge for (filter, brake pad, tire). <b>Labour (flat)</b> = a fixed price for the job; <b>Labour (hourly)</b> = hours × your shop rate. Manage the <b>service list</b> in Settings.</div>
     <div class="totals" style="margin-top:16px">
       <div class="line"><span>Subtotal</span><span id="tSub">$0.00</span></div>
       <div class="line"><span>HST (<span id="tRate">13</span>%)</span><span id="tHst">$0.00</span></div>
@@ -272,6 +276,10 @@
   <button class="btn ghost" onclick="openEmailModal()"><span data-ic="mail"></span> Email to customer</button>
   <button class="btn" onclick="saveInvoice()"><span data-ic="save"></span> Save to history</button>
   <button class="btn ghost" onclick="newInvoice()"><span data-ic="plus"></span> New invoice</button>
+</div>
+<div class="action-bar no-print" id="settingsBar" style="display:none">
+  <button class="btn" onclick="saveSettings()"><span data-ic="save"></span> Save all settings</button>
+  <button class="btn ghost" onclick="exportBackup()"><span data-ic="download"></span> Back up now</button>
 </div>
 
 <!-- ======================= HISTORY TAB ======================= -->
@@ -328,7 +336,7 @@
     <div class="grid g3" style="margin-top:12px">
       <div class="field"><label>HST / GST Business Number</label><input id="sHstNo" placeholder="e.g. 123456789 RT0001"></div>
       <div class="field"><label>HST rate (%) — Ontario 13%</label><input id="sHstRate" type="number" step="0.01" value="13"></div>
-      <div class="field"><label>Default hourly labor rate ($)</label><input id="sLaborRate" type="number" step="0.01" placeholder="e.g. 110"></div>
+      <div class="field"><label>Default hourly labour rate ($)</label><input id="sLaborRate" type="number" step="0.01" placeholder="e.g. 110"></div>
     </div>
   </div>
 
@@ -405,6 +413,38 @@
       <input id="importFile" type="file" accept="application/json,.json" style="display:none" onchange="importBackup(event)">
     </div>
     <div class="hint" id="lastBackupTxt"></div>
+    <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+      <div style="font-weight:600;color:var(--blue);margin-bottom:4px">Automatic cloud backup (Google Drive)</div>
+      <div class="hint" style="margin-bottom:10px">Pick a folder inside <b>Google Drive</b> (or OneDrive). Every time you save an invoice, a fresh backup is copied there automatically — organized by year — so it's safe off this computer and your accountant can reach it.</div>
+      <div class="row-actions" style="align-items:center">
+        <button class="btn ghost" onclick="pickBackupFolder()"><span data-ic="upload"></span> Choose Google Drive folder…</button>
+        <span id="backupFolderTxt" class="hint" style="margin:0"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card no-print">
+    <h2>Tax report (HST summary for your accountant)</h2>
+    <div class="hint" style="margin-bottom:12px">Pick a date range (e.g. a quarter or a full year) and download a summary that matches the Ontario HST return: <b>Total Sales (Line 101)</b> and <b>HST Collected (Line 105)</b>, plus every invoice in that period.</div>
+    <div class="grid g3">
+      <div class="field"><label>From</label><input id="taxFrom" type="date" oninput="taxUpdate()"></div>
+      <div class="field"><label>To</label><input id="taxTo" type="date" oninput="taxUpdate()"></div>
+      <div class="field"><label>Quick pick</label>
+        <select id="taxQuick" onchange="taxQuickPick()">
+          <option value="">Custom range…</option>
+          <option value="ytd">This year to date</option>
+          <option value="q1">Q1 (Jan–Mar)</option>
+          <option value="q2">Q2 (Apr–Jun)</option>
+          <option value="q3">Q3 (Jul–Sep)</option>
+          <option value="q4">Q4 (Oct–Dec)</option>
+        </select>
+      </div>
+    </div>
+    <div id="taxSummary" class="hint" style="margin-top:12px"></div>
+    <div class="row-actions" style="margin-top:12px">
+      <button class="btn" onclick="taxReport('csv')"><span data-ic="table"></span> Download tax report (CSV)</button>
+      <button class="btn ghost" onclick="taxReport('print')"><span data-ic="printer"></span> Print / Save as PDF</button>
+    </div>
   </div>
 </div>
 </div><!-- /wrap -->
@@ -519,9 +559,9 @@ const DEFAULTS={
   terms:'Warranty: new and reconditioned parts and the labour to install them are covered for 90 days or 5,000 km, whichever comes first, in accordance with Ontario’s Consumer Protection Act, 2002. The warranty does not cover misuse, accident, or normal wear. The shop is not responsible for loss of or damage to vehicles, or to articles left in them, from fire, theft, or any cause beyond our reasonable control. Overdue balances are subject to interest of 2% per month (24% per year). All amounts are in Canadian dollars and include H.S.T. where applicable. You have rights under the Consumer Protection Act, 2002.',
   smtpHost:'smtp.gmail.com', smtpPort:'465', smtpUser:'', smtpPass:'', smtpFrom:'',
   geminiKey:'', geminiModel:'gemini-flash-latest',
-  emailSubj:'Invoice {invoice} from {company}',
-  emailBody:'Hi {name},\n\nThank you for choosing {company}. Please find your invoice {invoice} for {total} attached.\n\nIf you have any questions, reply to this email or call {phone}.\n\nThank you for your business!\n{company}',
-  nextNo:1001, invPrefix:'INV', lastBackup:'',
+  emailSubj:'Your invoice from {company} — {invoice}',
+  emailBody:'Hi {name},\n\nThank you for trusting {company} with your vehicle. Your invoice ({invoice}) for {total} is attached to this email as a PDF for your records.\n\nThe work carried out and any parts used are itemized on the invoice. If you have any questions about the service, or notice anything that needs a second look, please reply to this email or call us at {phone} — we\'re happy to help.\n\nWe appreciate your business and look forward to keeping your vehicle running safely.\n\nBest regards,\n{company}',
+  nextNo:1001, invPrefix:'INV', lastBackup:'', backupFolder:'',
   services:[
     {name:'Oil change (synthetic)', type:'Labor (flat)', price:''},
     {name:'Tire rotation', type:'Labor (flat)', price:''},
@@ -549,6 +589,7 @@ function loadSettingsForm(){
   $('sAuth').value=s.auth; $('sTerms').value=s.terms; $('sNextNo').value=s.nextNo; $('sInvPrefix').value=s.invPrefix||'INV'; updateNoPreview();
   $('sSmtpHost').value=s.smtpHost; $('sSmtpPort').value=s.smtpPort; $('sSmtpUser').value=s.smtpUser;
   $('sSmtpPass').value=s.smtpPass; $('sSmtpFrom').value=s.smtpFrom; $('sGeminiKey').value=s.geminiKey||''; $('sGeminiModel').value=s.geminiModel||'gemini-flash-latest';
+  showBackupFolder();
   $('sEmailSubj').value=s.emailSubj; $('sEmailBody').value=s.emailBody;
   renderLogoPreview('blue', invLogo(), s.logoSize);
   renderLogoPreview('white', topLogo());
@@ -599,10 +640,11 @@ function applyBranding(){
 
 /* ================= service list ================= */
 const TYPES=['Part','Labor (flat)','Labor (hourly)'];
+const typeLabel=t=>String(t).replace('Labor','Labour'); // display Canadian spelling; stored value stays the same
 function addSvcRow(name='',type='Labor (flat)',price=''){
   const tr=document.createElement('tr');
   tr.innerHTML=`<td><input class="s-name" value="${esc(name)}" placeholder="e.g. Oil change"></td>
-    <td><select class="s-type">${TYPES.map(t=>`<option${t===type?' selected':''}>${t}</option>`).join('')}</select></td>
+    <td><select class="s-type">${TYPES.map(t=>`<option value="${t}"${t===type?' selected':''}>${typeLabel(t)}</option>`).join('')}</select></td>
     <td class="num"><input class="s-price num" type="number" step="0.01" value="${price}"></td>
     <td><button class="del">${ic('x')}</button></td>`;
   $('svcRows').appendChild(tr); tr.querySelector('.del').onclick=()=>tr.remove();
@@ -626,7 +668,7 @@ function addQuickService(){
 /* ================= line items ================= */
 function addRow(type='Part',desc='',qty=1,price=0){
   const s=getSettings(); const tr=document.createElement('tr');
-  tr.innerHTML=`<td><select class="i-type">${TYPES.map(t=>`<option${t===type?' selected':''}>${t}</option>`).join('')}</select></td>
+  tr.innerHTML=`<td><select class="i-type">${TYPES.map(t=>`<option value="${t}"${t===type?' selected':''}>${typeLabel(t)}</option>`).join('')}</select></td>
     <td><div class="desc-wrap"><input class="i-desc" value="${esc(desc)}" placeholder="Description"><button class="ai-mini" onclick="improveField(this)" title="Improve this description with AI">${ic('sparkles','ics')}</button></div></td>
     <td class="num"><input class="i-qty num" type="number" step="0.01" value="${qty}"></td>
     <td class="num"><input class="i-price num" type="number" step="0.01" value="${price}"></td>
@@ -689,7 +731,7 @@ function renderCopy(){
   const s=getSettings(), d=collect();
   const dateTxt=d.date? new Date(d.date+'T00:00').toLocaleDateString('en-CA',{year:'numeric',month:'long',day:'numeric'}) : '';
   const veh=[d.veh.year,d.veh.make,d.veh.model].filter(Boolean).join(' ');
-  const label={'Part':'Part','Labor (flat)':'Labor','Labor (hourly)':'Labor (hrs)'};
+  const label={'Part':'Part','Labor (flat)':'Labour','Labor (hourly)':'Labour (hrs)'};
   const rows=d.items.map(i=>`<tr><td>${esc(label[i.type]||i.type)}</td><td>${esc(i.desc)}</td>
       <td class="num">${i.qty}</td><td class="num">${money(i.price)}</td><td class="num">${money(i.qty*i.price)}</td></tr>`).join('')
       || `<tr><td colspan="5" style="color:#999">No items</td></tr>`;
@@ -769,8 +811,14 @@ function paperDoc(dual){
 function invoicePdfName(dual){
   return (getSettings().name||'Invoice')+' Invoice '+($('invNo').value||'')+(dual?' (2 copies)':'');
 }
+// Save to history automatically before printing/emailing, so no invoice is ever lost.
+function autoSaveForOutput(){
+  const d=collect();
+  if(d.cust.name||d.cust.phone||d.veh.plate||(d.items&&d.items.length)) saveInvoice();
+}
 function buildAndPrint(dual){
   if(!$('invNo').value) $('invNo').value=formatNo(getSettings().nextNo);
+  autoSaveForOutput();
   // Desktop app: render a clean PDF and open it (no browser print-header, exact output)
   if(window.adtNative && window.adtNative.openPdf){
     window.adtNative.openPdf(paperDoc(dual), invoicePdfName(dual)).then(r=>{
@@ -813,6 +861,7 @@ function sendEmail(){
   }
   if(!s.smtpUser || !s.smtpPass){ alert('First connect your Gmail in Settings → Email account (SMTP), then Save all settings.'); $('emailModal').style.display='none'; switchTab('settings'); return; }
   if(!$('invNo').value) $('invNo').value=formatNo(s.nextNo);
+  autoSaveForOutput();
   const btn=event&&event.target?event.target.closest('button'):null; if(btn){ btn.disabled=true; }
   toast('Sending email…');
   b.send({host:s.smtpHost,port:s.smtpPort,user:s.smtpUser,pass:s.smtpPass,fromName:s.smtpFrom||s.name,
@@ -827,17 +876,23 @@ function copyEmail(){
   catch(e){ const t=$('emBody'); t.select(); document.execCommand('copy'); flash('Message copied'); }
 }
 // ---- AI streaming: text appears live as Gemini writes it ----
-let __aiReqId=null, __aiTarget=null;
+let __aiReqId=null, __aiTarget=null, __aiFirst=false, __aiBtn=null;
 function initAIStream(){
   if(window.adtAI && window.adtAI.onChunk && !window.__aiStreamInit){
     window.__aiStreamInit=true;
     window.adtAI.onChunk(function(d){
       if(d && d.reqId===__aiReqId && __aiTarget){
+        if(__aiFirst){ __aiTarget.value=''; __aiTarget.classList.remove('ai-busy'); __aiFirst=false; if(__aiBtn) setBtnBusy(__aiBtn,false); }
         __aiTarget.value += d.delta;
         if(__aiTarget.tagName==='TEXTAREA'){ __aiTarget.scrollTop=__aiTarget.scrollHeight; }
       }
     });
   }
+}
+function setBtnBusy(btn,busy){
+  if(!btn) return;
+  if(busy){ btn.dataset.label=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spin">'+ic('sparkles')+'</span> Rewriting…'; }
+  else if(btn.dataset.label){ btn.innerHTML=btn.dataset.label; btn.disabled=false; delete btn.dataset.label; }
 }
 function streamImprove(target, kind, btn){
   if(!target) return;
@@ -848,17 +903,18 @@ function streamImprove(target, kind, btn){
   if(!s.geminiKey){ toast('Add your free Gemini API key in Settings → AI note helper first.','err'); switchTab('settings'); return; }
   initAIStream();
   const reqId='r'+Date.now()+'_'+Math.floor(performance.now());
-  __aiReqId=reqId; __aiTarget=target;
-  if(btn) btn.disabled=true;
-  target.value='';                 // stream fills it live
+  __aiReqId=reqId; __aiTarget=target; __aiFirst=true; __aiBtn=btn;
+  setBtnBusy(btn,true);
+  target.value='✨ Rewriting…'; target.classList.add('ai-busy');   // visible "working" state until first words arrive
+  toast('AI is rewriting…');
   window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:original, kind:kind, reqId:reqId})
     .then(function(r){
-      if(btn) btn.disabled=false;
       if(reqId!==__aiReqId) return; // a newer request took over
+      target.classList.remove('ai-busy'); setBtnBusy(btn,false);
       if(r&&r.ok&&r.text){ target.value=r.text; markDirty(); toast('Improved','ok'); }
       else { target.value=original; toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); }
     })
-    .catch(function(err){ if(btn) btn.disabled=false; if(reqId===__aiReqId) target.value=original; toast('AI failed: '+err,'err'); });
+    .catch(function(err){ if(reqId===__aiReqId){ target.classList.remove('ai-busy'); setBtnBusy(btn,false); target.value=original; } toast('AI failed: '+err,'err'); });
 }
 function improveNote(){ streamImprove($('notes'), 'note', (typeof event!=='undefined'&&event&&event.target)?event.target.closest('button'):null); }
 function improveField(btn){ streamImprove(btn.parentElement.querySelector('input.i-desc'), 'line', btn); }
@@ -887,7 +943,7 @@ function saveInvoice(){
     const s=getSettings(); s.nextNo=(parseInt(s.nextNo)||1001)+1; saveSettingsObj(s);
     $('sNextNo').value=s.nextNo; $('editingId').value=d.id; toast('Saved to history — next # '+formatNo(s.nextNo),'ok');
   }
-  upsertCustomerFromInvoice(d); clearDraft(); renderHistory();
+  upsertCustomerFromInvoice(d); clearDraft(); renderHistory(); autoCloudBackup();
 }
 function isoStamp(){ return new Date().toISOString(); }
 function newInvoice(){
@@ -990,6 +1046,66 @@ function refreshBackupBanner(){
   }else $('lastBackupTxt').textContent='Last backup: never';
   $('backupMsg').textContent=msg;
   b.style.display=(overdue && (getInvoices().length||getCustomers().length))?'flex':'none';
+}
+function backupJSON(){ return JSON.stringify({ app:'adt-invoice-generator', version:5, settings:getSettings(), invoices:getInvoices(), customers:getCustomers() }, null, 2); }
+function showBackupFolder(){ const el=$('backupFolderTxt'); if(!el) return; const f=getSettings().backupFolder; el.innerHTML=f?('Backing up to: <b>'+esc(f)+'\\AD&amp;T Invoice Backups</b>'):'No folder chosen — automatic cloud backup is off.'; }
+function pickBackupFolder(){
+  if(!(window.adtNative && window.adtNative.pickFolder)){ alert('Choosing a backup folder runs in the installed desktop app.'); return; }
+  window.adtNative.pickFolder().then(r=>{ if(r && r.ok && r.folder){ const s=getSettings(); s.backupFolder=r.folder; saveSettingsObj(s); showBackupFolder(); toast('Auto-backup folder set','ok'); autoCloudBackup(); } });
+}
+function autoCloudBackup(){
+  const s=getSettings();
+  if(!(s.backupFolder && window.adtNative && window.adtNative.writeBackup)) return;
+  window.adtNative.writeBackup({ folder:s.backupFolder, content:backupJSON() }).then(r=>{ if(r && r.ok){ const s2=getSettings(); s2.lastBackup=isoStamp(); saveSettingsObj(s2); refreshBackupBanner(); } }).catch(()=>{});
+}
+/* ---- Tax report (Ontario HST: Line 101 total sales, Line 105 HST collected) ---- */
+function taxQuickPick(){
+  const v=$('taxQuick').value; if(!v) return; const y=new Date().getFullYear();
+  const set=(f,t)=>{ $('taxFrom').value=f; $('taxTo').value=t; taxUpdate(); };
+  if(v==='ytd') set(y+'-01-01', today());
+  else if(v==='q1') set(y+'-01-01', y+'-03-31');
+  else if(v==='q2') set(y+'-04-01', y+'-06-30');
+  else if(v==='q3') set(y+'-07-01', y+'-09-30');
+  else if(v==='q4') set(y+'-10-01', y+'-12-31');
+}
+function taxRangeInvoices(){
+  const from=$('taxFrom').value, to=$('taxTo').value;
+  return getInvoices().filter(d=>{ const dt=d.date||''; if(from && dt<from) return false; if(to && dt>to) return false; return true; }).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+}
+function taxTotals(rows){ let sales=0,hst=0,total=0; rows.forEach(d=>{ sales+=d.sub||0; hst+=d.hst||0; total+=d.total||0; }); return { count:rows.length, sales, hst, total }; }
+function taxUpdate(){
+  const rows=taxRangeInvoices(), t=taxTotals(rows);
+  $('taxSummary').innerHTML = rows.length
+    ? '<b>'+t.count+'</b> invoice'+(t.count===1?'':'s')+' &nbsp;·&nbsp; Total Sales (Line 101): <b>'+money(t.sales)+'</b> &nbsp;·&nbsp; HST Collected (Line 105): <b>'+money(t.hst)+'</b> &nbsp;·&nbsp; Total collected: <b>'+money(t.total)+'</b>'
+    : 'No invoices in this date range.';
+}
+function taxReport(mode){
+  const rows=taxRangeInvoices(); if(!rows.length){ alert('No invoices in that date range.'); return; }
+  const t=taxTotals(rows), from=$('taxFrom').value, to=$('taxTo').value, s=getSettings();
+  if(mode==='csv'){
+    const L=[];
+    L.push([s.name+' — HST Tax Report'].map(csvCell).join(','));
+    L.push(['Period', (from||'start')+' to '+(to||'today')].map(csvCell).join(','));
+    L.push(['HST #', s.hstNo||''].map(csvCell).join(','));
+    L.push('');
+    L.push(['Total Sales (Line 101)', t.sales.toFixed(2)].map(csvCell).join(','));
+    L.push(['HST Collected (Line 105)', t.hst.toFixed(2)].map(csvCell).join(','));
+    L.push(['Total Collected', t.total.toFixed(2)].map(csvCell).join(','));
+    L.push(['Invoices', String(t.count)].map(csvCell).join(','));
+    L.push('');
+    L.push(['Invoice #','Date','Customer','Sales (pre-HST)','HST','Total','Status','Payment'].join(','));
+    rows.forEach(d=>{ L.push([d.invNo,d.date,d.cust.name,(d.sub||0).toFixed(2),(d.hst||0).toFixed(2),(d.total||0).toFixed(2),d.paid?'PAID':'DUE',d.pay].map(csvCell).join(',')); });
+    downloadFile('HST-tax-report-'+(from||'')+'-to-'+(to||'')+'.csv', L.join('\r\n'), 'text/csv'); flash('Tax report downloaded');
+  } else {
+    const rowsHtml=rows.map(d=>'<tr><td>'+esc(d.invNo)+'</td><td>'+esc(d.date)+'</td><td>'+esc(d.cust.name||'')+'</td><td class="num">'+money(d.sub)+'</td><td class="num">'+money(d.hst)+'</td><td class="num">'+money(d.total)+'</td></tr>').join('');
+    const doc='<!doctype html><html><head><meta charset="utf-8"><title>HST Tax Report</title><style>body{font-family:Helvetica,Arial,sans-serif;color:#111;padding:6px}h1{color:#0b2e6b;font-size:20px;margin:0 0 4px}table{width:100%;border-collapse:collapse;margin-top:14px}th{background:#0b2e6b;color:#fff;text-align:left;padding:7px;font-size:12px}th.num,td.num{text-align:right}td{padding:6px 7px;border-bottom:1px solid #e4e4e4;font-size:12px}.sum{margin-top:14px;font-size:14px;line-height:1.8}.sum b{color:#0b2e6b}</style></head><body>'
+      +'<h1>'+esc(s.name)+' — HST Tax Report</h1>'
+      +'<div>Period: <b>'+esc(from||'start')+'</b> to <b>'+esc(to||'today')+'</b>'+(s.hstNo?' &nbsp;•&nbsp; HST# '+esc(s.hstNo):'')+'</div>'
+      +'<div class="sum">Total Sales (Line 101): <b>'+money(t.sales)+'</b><br>HST Collected (Line 105): <b>'+money(t.hst)+'</b><br>Total Collected: <b>'+money(t.total)+'</b> &nbsp;('+t.count+' invoice'+(t.count===1?'':'s')+')</div>'
+      +'<table><thead><tr><th>Invoice #</th><th>Date</th><th>Customer</th><th class="num">Sales</th><th class="num">HST</th><th class="num">Total</th></tr></thead><tbody>'+rowsHtml+'</tbody></table></body></html>';
+    if(window.adtNative && window.adtNative.openPdf){ window.adtNative.openPdf(doc, esc(s.name)+' HST Report'); }
+    else { const w=window.open('','_blank'); if(w){ w.document.write(doc); w.document.close(); setTimeout(()=>w.print(),300); } }
+  }
 }
 
 /* ================= customer database ================= */
@@ -1123,6 +1239,7 @@ function switchTab(t){
   document.querySelectorAll('.tab-btn').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));
   ['create','history','customers','settings'].forEach(k=>$('tab-'+k).style.display=(k===t?'block':'none'));
   $('actionBar').style.display=(t==='create')?'flex':'none';
+  $('settingsBar').style.display=(t==='settings')?'flex':'none';
   if(t==='history') renderHistory(); if(t==='customers') renderCustomers();
 }
 document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));

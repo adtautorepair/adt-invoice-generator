@@ -233,3 +233,28 @@ ipcMain.handle('ai:improve', async (e, o) => {
     return { ok: true, text: r.text, model };
   } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
 });
+
+/* ---------- Auto-backup to a folder (e.g. a Google Drive synced folder) ---------- */
+ipcMain.handle('backup:pickFolder', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Choose your backup folder (tip: pick a folder inside Google Drive or OneDrive)',
+    properties: ['openDirectory', 'createDirectory']
+  });
+  if (canceled || !filePaths || !filePaths[0]) return { ok: false, canceled: true };
+  return { ok: true, folder: filePaths[0] };
+});
+ipcMain.handle('backup:write', async (e, o) => {
+  try {
+    if (!o.folder) return { ok: false, error: 'No backup folder set.' };
+    const root = path.join(o.folder, 'AD&T Invoice Backups');
+    const now = new Date();
+    const yearDir = path.join(root, String(now.getFullYear()));
+    fs.mkdirSync(yearDir, { recursive: true });
+    // Always-current full backup at the top level...
+    fs.writeFileSync(path.join(root, 'latest-backup.json'), o.content, 'utf8');
+    // ...plus a dated daily snapshot filed under the year.
+    const stamp = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    fs.writeFileSync(path.join(yearDir, 'backup-' + stamp + '.json'), o.content, 'utf8');
+    return { ok: true, path: root };
+  } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
+});

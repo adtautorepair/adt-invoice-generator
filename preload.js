@@ -6,7 +6,9 @@ contextBridge.exposeInMainWorld('adtNative', {
   isDesktop: true,
   savePdf: (html, defaultName) => ipcRenderer.invoke('invoice:savePdf', { html, defaultName }),
   openPdf: (html, name) => ipcRenderer.invoke('invoice:openPdf', { html, name }),
-  print: (html) => ipcRenderer.invoke('invoice:print', { html })
+  print: (html) => ipcRenderer.invoke('invoice:print', { html }),
+  pickFolder: () => ipcRenderer.invoke('backup:pickFolder'),
+  writeBackup: (opts) => ipcRenderer.invoke('backup:write', opts)
 });
 
 contextBridge.exposeInMainWorld('adtMail', {
