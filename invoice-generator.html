@@ -63,6 +63,10 @@
   table.items th{font-size:12px;color:var(--muted);text-align:left;padding:6px 6px;border-bottom:2px solid var(--line)}
   table.items td{padding:5px 6px;border-bottom:1px solid #eee;vertical-align:middle}
   table.items td input,table.items td select{padding:6px 8px}
+  .desc-wrap{position:relative}
+  .desc-wrap input{width:100%;padding-right:30px}
+  .ai-mini{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--blue2);padding:2px;display:inline-flex;line-height:1}
+  .ai-mini:hover{color:var(--blue)}.ai-mini:disabled{opacity:.4;cursor:default}
   .num{text-align:right}
   .del{background:#fbeaea;color:#b3261e;border:none;border-radius:5px;padding:6px 9px;cursor:pointer;font-weight:700;display:inline-flex}
 
@@ -623,7 +627,7 @@ function addQuickService(){
 function addRow(type='Part',desc='',qty=1,price=0){
   const s=getSettings(); const tr=document.createElement('tr');
   tr.innerHTML=`<td><select class="i-type">${TYPES.map(t=>`<option${t===type?' selected':''}>${t}</option>`).join('')}</select></td>
-    <td><input class="i-desc" value="${esc(desc)}" placeholder="Description"></td>
+    <td><div class="desc-wrap"><input class="i-desc" value="${esc(desc)}" placeholder="Description"><button class="ai-mini" onclick="improveField(this)" title="Improve this description with AI">${ic('sparkles','ics')}</button></div></td>
     <td class="num"><input class="i-qty num" type="number" step="0.01" value="${qty}"></td>
     <td class="num"><input class="i-price num" type="number" step="0.01" value="${price}"></td>
     <td class="num i-amt">$0.00</td><td><button class="del">${ic('x')}</button></td>`;
@@ -833,6 +837,19 @@ function improveNote(){
   window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:t})
     .then(r=>{ if(btn) btn.disabled=false; if(r&&r.ok&&r.text){ $('notes').value=r.text; markDirty(); toast('Note improved','ok'); } else { toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); } })
     .catch(err=>{ if(btn) btn.disabled=false; toast('AI failed: '+err,'err'); });
+}
+// Improve a single Parts & Labor description line
+function improveField(btn){
+  const input=btn.parentElement.querySelector('input.i-desc');
+  const t=(input.value||'').trim();
+  if(!t){ toast('Type a description first.','err'); return; }
+  const s=getSettings();
+  if(!(window.adtAI && window.adtAI.improve)){ alert('The AI helper runs in the installed desktop version of the app.'); return; }
+  if(!s.geminiKey){ toast('Add your free Gemini API key in Settings → AI note helper first.','err'); switchTab('settings'); return; }
+  btn.disabled=true; toast('Improving…');
+  window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:t, kind:'line'})
+    .then(r=>{ btn.disabled=false; if(r&&r.ok&&r.text){ input.value=r.text; markDirty(); toast('Description improved','ok'); } else { toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); } })
+    .catch(err=>{ btn.disabled=false; toast('AI failed: '+err,'err'); });
 }
 function sendTestEmail(){
   const b=mailBridge(), s=getSettings();

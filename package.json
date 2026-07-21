@@ -1,6 +1,6 @@
 {
   "name": "adt-invoice-generator",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "AD&T General Auto Repair - Invoice Generator",
   "author": "AD&T General Auto Repair",
   "main": "main.js",
