@@ -6,6 +6,7 @@ const nodemailer = require('nodemailer');
 const { autoUpdater } = require('electron-updater');
 
 let win;
+let isQuitting = false;
 
 function createWindow() {
   win = new BrowserWindow({
@@ -28,6 +29,13 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('http')) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
+  });
+  // When the main window is closed, fully quit — destroy any lingering hidden
+  // PDF/print/email windows first so the app never stays alive in the background.
+  win.on('closed', () => {
+    win = null;
+    BrowserWindow.getAllWindows().forEach(w => { try { w.destroy(); } catch (e) {} });
+    if (!isQuitting) { isQuitting = true; app.quit(); }
   });
 }
 
@@ -67,7 +75,7 @@ async function loadHiddenWindow(html) {
 }
 function cleanupHiddenWindow(w) {
   try { if (w._tmp && fs.existsSync(w._tmp)) fs.unlinkSync(w._tmp); } catch (e) {}
-  try { if (!w.isDestroyed()) w.close(); } catch (e) {}
+  try { if (w && !w.isDestroyed()) w.destroy(); } catch (e) {}
 }
 async function renderPdfBuffer(html) {
   const w = await loadHiddenWindow(html);
