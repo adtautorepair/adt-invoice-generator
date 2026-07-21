@@ -377,7 +377,7 @@
     <div class="hint" style="margin-bottom:12px">Lets the <b>Improve writing</b> button on the Create tab rewrite work notes into clean, professional English — handy if English isn't your first language. Uses Google Gemini's free tier.</div>
     <div class="grid g2">
       <div class="field"><label>Google Gemini API key</label><input id="sGeminiKey" type="password" placeholder="Paste your free Gemini API key"></div>
-      <div class="field"><label>AI model (advanced — leave as default)</label><input id="sGeminiModel" placeholder="gemini-2.5-flash"></div>
+      <div class="field"><label>AI model (advanced — leave as default)</label><input id="sGeminiModel" placeholder="gemini-flash-latest"></div>
     </div>
     <div class="hint" style="margin-top:8px">Get a free key at <b>aistudio.google.com</b> → “Get API key”. It’s free, used only for the Improve-writing button, and needs internet when used. If you see a “quota/limit” error, wait a few minutes for a new key to activate, or try another model here (e.g. <code>gemini-2.0-flash</code> or <code>gemini-flash-latest</code>).</div>
   </div>
@@ -514,7 +514,7 @@ const DEFAULTS={
   auth:'I authorize the repair work, parts, and materials listed on this invoice, together with any additional work I have approved. I give the shop and its staff permission to operate the vehicle for testing, inspection, and delivery. I acknowledge that the shop holds a lien on this vehicle under the Repair and Storage Liens Act (Ontario) for the amount owing until it is paid in full.',
   terms:'Warranty: new and reconditioned parts and the labour to install them are covered for 90 days or 5,000 km, whichever comes first, in accordance with Ontario’s Consumer Protection Act, 2002. The warranty does not cover misuse, accident, or normal wear. The shop is not responsible for loss of or damage to vehicles, or to articles left in them, from fire, theft, or any cause beyond our reasonable control. Overdue balances are subject to interest of 2% per month (24% per year). All amounts are in Canadian dollars and include H.S.T. where applicable. You have rights under the Consumer Protection Act, 2002.',
   smtpHost:'smtp.gmail.com', smtpPort:'465', smtpUser:'', smtpPass:'', smtpFrom:'',
-  geminiKey:'', geminiModel:'gemini-2.5-flash',
+  geminiKey:'', geminiModel:'gemini-flash-latest',
   emailSubj:'Invoice {invoice} from {company}',
   emailBody:'Hi {name},\n\nThank you for choosing {company}. Please find your invoice {invoice} for {total} attached.\n\nIf you have any questions, reply to this email or call {phone}.\n\nThank you for your business!\n{company}',
   nextNo:1001, invPrefix:'INV', lastBackup:'',
@@ -544,7 +544,7 @@ function loadSettingsForm(){
   $('sLogoSize').value=s.logoSize; $('logoSizeVal').textContent=s.logoSize; $('sStamp').checked=!!s.stamp; $('sBw').checked=!!s.bw;
   $('sAuth').value=s.auth; $('sTerms').value=s.terms; $('sNextNo').value=s.nextNo; $('sInvPrefix').value=s.invPrefix||'INV'; updateNoPreview();
   $('sSmtpHost').value=s.smtpHost; $('sSmtpPort').value=s.smtpPort; $('sSmtpUser').value=s.smtpUser;
-  $('sSmtpPass').value=s.smtpPass; $('sSmtpFrom').value=s.smtpFrom; $('sGeminiKey').value=s.geminiKey||''; $('sGeminiModel').value=s.geminiModel||'gemini-2.5-flash';
+  $('sSmtpPass').value=s.smtpPass; $('sSmtpFrom').value=s.smtpFrom; $('sGeminiKey').value=s.geminiKey||''; $('sGeminiModel').value=s.geminiModel||'gemini-flash-latest';
   $('sEmailSubj').value=s.emailSubj; $('sEmailBody').value=s.emailBody;
   renderLogoPreview('blue', invLogo(), s.logoSize);
   renderLogoPreview('white', topLogo());
@@ -582,7 +582,7 @@ function saveSettings(){
     logoSize:parseInt($('sLogoSize').value)||120, stamp:$('sStamp').checked, bw:$('sBw').checked,
     auth:$('sAuth').value.trim(), terms:$('sTerms').value.trim(),
     smtpHost:$('sSmtpHost').value.trim(), smtpPort:$('sSmtpPort').value.trim(), smtpUser:$('sSmtpUser').value.trim(),
-    smtpPass:$('sSmtpPass').value, smtpFrom:$('sSmtpFrom').value.trim(), geminiKey:$('sGeminiKey').value.trim(), geminiModel:$('sGeminiModel').value.trim()||'gemini-2.5-flash',
+    smtpPass:$('sSmtpPass').value, smtpFrom:$('sSmtpFrom').value.trim(), geminiKey:$('sGeminiKey').value.trim(), geminiModel:$('sGeminiModel').value.trim()||'gemini-flash-latest',
     emailSubj:$('sEmailSubj').value, emailBody:$('sEmailBody').value, nextNo:parseInt($('sNextNo').value)||1001, invPrefix:$('sInvPrefix').value.trim()||'INV'
   };
   saveSettingsObj(s); tmpLogo=null;

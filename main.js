@@ -161,20 +161,42 @@ ipcMain.handle('mail:send', async (e, o) => {
 });
 
 /* ---------- AI note helper (Google Gemini free tier) ---------- */
+async function callGemini(apiKey, model, prompt) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
+  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } };
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+// Ask the API which models this key can actually use, and pick a good text model.
+async function pickModel(apiKey) {
+  try {
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + encodeURIComponent(apiKey));
+    const data = await res.json().catch(() => ({}));
+    const models = (data && data.models || []).filter(m =>
+      (m.supportedGenerationMethods || []).includes('generateContent') &&
+      !/vision|image|imagen|tts|audio|embedding|aqa|gemma/i.test(m.name || ''));
+    const byPref = (re) => models.find(m => re.test(m.name || ''));
+    const chosen = byPref(/flash-latest/i) || byPref(/flash/i) || byPref(/latest/i) || models[0];
+    return chosen ? String(chosen.name).replace(/^models\//, '') : null;
+  } catch (e) { return null; }
+}
 ipcMain.handle('ai:improve', async (e, o) => {
   try {
     if (!o.apiKey) return { ok: false, error: 'No Gemini API key set (Settings > AI note helper).' };
     if (!o.text) return { ok: false, error: 'Nothing to improve.' };
-    const model = (o.model && String(o.model).trim()) || 'gemini-2.5-flash';
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(o.apiKey);
     const prompt = 'You are helping a Canadian auto repair shop write the work-description note on a customer invoice. Rewrite the note below in clear, correct, professional English suitable for a customer invoice. Keep every specific detail (parts, services, measurements, recommendations). Do not invent details that are not present. Keep it concise. Return only the rewritten note with no preamble, quotation marks, or explanation.\n\nNote:\n' + o.text;
-    const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } };
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({}));
+    let model = (o.model && String(o.model).trim()) || 'gemini-flash-latest';
+    let { res, data } = await callGemini(o.apiKey, model, prompt);
+    // If the chosen model is retired/unavailable, auto-discover a working one and retry once.
+    if (!res.ok && /not found|not available|no longer available|not supported|unsupported/i.test(JSON.stringify(data || {}))) {
+      const alt = await pickModel(o.apiKey);
+      if (alt && alt !== model) { model = alt; ({ res, data } = await callGemini(o.apiKey, model, prompt)); }
+    }
     if (!res.ok) return { ok: false, error: (data && data.error && data.error.message) || ('HTTP ' + res.status) };
     const out = data && data.candidates && data.candidates[0] && data.candidates[0].content
       && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
     if (!out) return { ok: false, error: 'No response from the AI. Check your API key.' };
-    return { ok: true, text: String(out).trim() };
+    return { ok: true, text: String(out).trim(), model };
   } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
 });
