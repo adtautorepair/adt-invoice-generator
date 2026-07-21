@@ -826,31 +826,42 @@ function copyEmail(){
   try{ navigator.clipboard.writeText(txt).then(()=>flash('Message copied')); }
   catch(e){ const t=$('emBody'); t.select(); document.execCommand('copy'); flash('Message copied'); }
 }
-function improveNote(){
-  const t=$('notes').value.trim();
-  if(!t){ toast('Write a note first, then click Improve.','err'); return; }
-  const s=getSettings();
-  if(!(window.adtAI && window.adtAI.improve)){ alert('The AI note helper runs in the installed desktop version of the app.'); return; }
-  if(!s.geminiKey){ toast('Add your free Gemini API key in Settings → AI note helper first.','err'); switchTab('settings'); return; }
-  const btn=event&&event.target?event.target.closest('button'):null; if(btn) btn.disabled=true;
-  toast('Improving the note…');
-  window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:t})
-    .then(r=>{ if(btn) btn.disabled=false; if(r&&r.ok&&r.text){ $('notes').value=r.text; markDirty(); toast('Note improved','ok'); } else { toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); } })
-    .catch(err=>{ if(btn) btn.disabled=false; toast('AI failed: '+err,'err'); });
+// ---- AI streaming: text appears live as Gemini writes it ----
+let __aiReqId=null, __aiTarget=null;
+function initAIStream(){
+  if(window.adtAI && window.adtAI.onChunk && !window.__aiStreamInit){
+    window.__aiStreamInit=true;
+    window.adtAI.onChunk(function(d){
+      if(d && d.reqId===__aiReqId && __aiTarget){
+        __aiTarget.value += d.delta;
+        if(__aiTarget.tagName==='TEXTAREA'){ __aiTarget.scrollTop=__aiTarget.scrollHeight; }
+      }
+    });
+  }
 }
-// Improve a single Parts & Labor description line
-function improveField(btn){
-  const input=btn.parentElement.querySelector('input.i-desc');
-  const t=(input.value||'').trim();
-  if(!t){ toast('Type a description first.','err'); return; }
+function streamImprove(target, kind, btn){
+  if(!target) return;
+  const original=(target.value||'').trim();
+  if(!original){ toast('Type something first.','err'); return; }
   const s=getSettings();
   if(!(window.adtAI && window.adtAI.improve)){ alert('The AI helper runs in the installed desktop version of the app.'); return; }
   if(!s.geminiKey){ toast('Add your free Gemini API key in Settings → AI note helper first.','err'); switchTab('settings'); return; }
-  btn.disabled=true; toast('Improving…');
-  window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:t, kind:'line'})
-    .then(r=>{ btn.disabled=false; if(r&&r.ok&&r.text){ input.value=r.text; markDirty(); toast('Description improved','ok'); } else { toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); } })
-    .catch(err=>{ btn.disabled=false; toast('AI failed: '+err,'err'); });
+  initAIStream();
+  const reqId='r'+Date.now()+'_'+Math.floor(performance.now());
+  __aiReqId=reqId; __aiTarget=target;
+  if(btn) btn.disabled=true;
+  target.value='';                 // stream fills it live
+  window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:original, kind:kind, reqId:reqId})
+    .then(function(r){
+      if(btn) btn.disabled=false;
+      if(reqId!==__aiReqId) return; // a newer request took over
+      if(r&&r.ok&&r.text){ target.value=r.text; markDirty(); toast('Improved','ok'); }
+      else { target.value=original; toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); }
+    })
+    .catch(function(err){ if(btn) btn.disabled=false; if(reqId===__aiReqId) target.value=original; toast('AI failed: '+err,'err'); });
 }
+function improveNote(){ streamImprove($('notes'), 'note', (typeof event!=='undefined'&&event&&event.target)?event.target.closest('button'):null); }
+function improveField(btn){ streamImprove(btn.parentElement.querySelector('input.i-desc'), 'line', btn); }
 function sendTestEmail(){
   const b=mailBridge(), s=getSettings();
   if(!b || !b.test){ alert('The test send runs in the installed desktop version. It sends a test email to '+(s.smtpUser||'your Gmail')+' so you can confirm the connection works.'); return; }

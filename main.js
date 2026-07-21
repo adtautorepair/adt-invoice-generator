@@ -181,6 +181,38 @@ async function pickModel(apiKey) {
     return chosen ? String(chosen.name).replace(/^models\//, '') : null;
   } catch (e) { return null; }
 }
+// Stream a Gemini response, calling onDelta(text) for each chunk as it arrives.
+async function streamGemini(apiKey, model, prompt, onDelta) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey);
+  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } };
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const data = await res.json().catch(() => ({})); return { ok: false, res, data }; }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '', full = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let idx;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (line.startsWith('data:')) {
+        const j = line.slice(5).trim();
+        if (j && j !== '[DONE]') {
+          try {
+            const obj = JSON.parse(j);
+            const d = obj && obj.candidates && obj.candidates[0] && obj.candidates[0].content
+              && obj.candidates[0].content.parts && obj.candidates[0].content.parts[0] && obj.candidates[0].content.parts[0].text;
+            if (d) { full += d; onDelta(d); }
+          } catch (_) {}
+        }
+      }
+    }
+  }
+  return { ok: true, text: full.trim() };
+}
 ipcMain.handle('ai:improve', async (e, o) => {
   try {
     if (!o.apiKey) return { ok: false, error: 'No Gemini API key set (Settings > AI note helper).' };
@@ -188,17 +220,16 @@ ipcMain.handle('ai:improve', async (e, o) => {
     const prompt = (o.kind === 'line')
       ? 'You are a service writer at a Canadian auto repair shop. Rewrite the rough text into a short, professional invoice line-item description (a brief phrase in title style, not a full sentence), using standard automotive service terminology and correct Canadian English. Include only what is mentioned; do not invent parts, quantities, or details. Return only the phrase, no quotation marks or preamble.\n\nExample:\nInput: chang oil\nOutput: Synthetic oil change\n\nExample:\nInput: frunt brake pad\nOutput: Front brake pad replacement\n\nNow rewrite this line item:\n' + o.text
       : 'You are a professional service writer at a Canadian auto repair shop. Rewrite the technician\'s rough note into a clear, concise, professional work description for a customer invoice. Use standard automotive service language, correct Canadian English, past tense, proper capitalization and punctuation, and industry-standard phrasing (Replaced, Performed, Installed, Inspected, Diagnosed, etc.). Include only the work and parts actually mentioned — do not invent details, quantities, prices, or recommendations. Keep it professional and to the point. Return only the rewritten description, with no preamble, labels, or quotation marks.\n\nExample:\nInput: customr make changes to oil and change 3 winder tires\nOutput: Performed oil change service and replaced 3 winter tires.\n\nNow rewrite this note:\n' + o.text;
+    const onDelta = (d) => { try { e.sender.send('ai:chunk', { reqId: o.reqId, delta: d }); } catch (_) {} };
     let model = (o.model && String(o.model).trim()) || 'gemini-flash-latest';
-    let { res, data } = await callGemini(o.apiKey, model, prompt);
+    let r = await streamGemini(o.apiKey, model, prompt, onDelta);
     // If the chosen model is retired/unavailable, auto-discover a working one and retry once.
-    if (!res.ok && /not found|not available|no longer available|not supported|unsupported/i.test(JSON.stringify(data || {}))) {
+    if (!r.ok && /not found|not available|no longer available|not supported|unsupported/i.test(JSON.stringify(r.data || {}))) {
       const alt = await pickModel(o.apiKey);
-      if (alt && alt !== model) { model = alt; ({ res, data } = await callGemini(o.apiKey, model, prompt)); }
+      if (alt && alt !== model) { model = alt; r = await streamGemini(o.apiKey, model, prompt, onDelta); }
     }
-    if (!res.ok) return { ok: false, error: (data && data.error && data.error.message) || ('HTTP ' + res.status) };
-    const out = data && data.candidates && data.candidates[0] && data.candidates[0].content
-      && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
-    if (!out) return { ok: false, error: 'No response from the AI. Check your API key.' };
-    return { ok: true, text: String(out).trim(), model };
+    if (!r.ok) return { ok: false, error: (r.data && r.data.error && r.data.error.message) || ('HTTP ' + (r.res && r.res.status)) };
+    if (!r.text) return { ok: false, error: 'No response from the AI. Check your API key.' };
+    return { ok: true, text: r.text, model };
   } catch (err) { return { ok: false, error: String(err && err.message || err) }; }
 });

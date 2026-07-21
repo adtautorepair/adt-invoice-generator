@@ -15,5 +15,10 @@ contextBridge.exposeInMainWorld('adtMail', {
 });
 
 contextBridge.exposeInMainWorld('adtAI', {
-  improve: (opts) => ipcRenderer.invoke('ai:improve', opts)
+  improve: (opts) => ipcRenderer.invoke('ai:improve', opts),
+  onChunk: (cb) => {
+    const listener = (e, data) => cb(data);
+    ipcRenderer.on('ai:chunk', listener);
+    return () => ipcRenderer.removeListener('ai:chunk', listener);
+  }
 });
