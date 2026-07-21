@@ -261,7 +261,10 @@
 
   <div class="card no-print">
     <div class="card-head"><h2>Notes (optional)</h2>
-      <button class="btn ghost sm" onclick="improveNote()" title="Rewrite the note in clear, professional English"><span data-ic="sparkles"></span> Improve writing</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn alt sm" onclick="draftNoteFromItems()" title="Let AI write the note from your Parts &amp; Labour lines"><span data-ic="sparkles"></span> Draft from work items</button>
+        <button class="btn ghost sm" onclick="improveNote()" title="Rewrite the note in clear, professional English"><span data-ic="sparkles"></span> Improve writing</button>
+      </div>
     </div>
     <textarea id="notes" placeholder="e.g. Replaced ignition coil and 4 spark plugs. Recommend brake inspection next visit."></textarea>
     <div class="hint">Type the work done in any English, then <b>Improve writing</b> cleans up the grammar and wording. Set up the free AI key in Settings → AI note helper.</div>
@@ -289,7 +292,7 @@
     <div class="field"><input id="histSearch" placeholder="Search by invoice #, customer name, phone, or plate…" oninput="renderHistory()"></div>
     <table class="hist" style="margin-top:14px">
       <thead><tr>
-        <th style="width:80px">Invoice #</th><th style="width:100px">Date</th>
+        <th style="width:120px">Invoice #</th><th style="width:100px">Date</th>
         <th>Customer</th><th>Vehicle</th>
         <th class="num" style="width:90px">Total</th><th style="width:70px">Status</th>
         <th style="width:250px"></th>
@@ -338,6 +341,13 @@
       <div class="field"><label>HST rate (%) — Ontario 13%</label><input id="sHstRate" type="number" step="0.01" value="13"></div>
       <div class="field"><label>Default hourly labour rate ($)</label><input id="sLaborRate" type="number" step="0.01" placeholder="e.g. 110"></div>
     </div>
+  </div>
+
+  <div class="card no-print">
+    <h2>Service / price list</h2>
+    <div class="hint" style="margin-bottom:14px">Common jobs. These show up in the <b>Quick add</b> dropdown on the invoice. Leave price blank if it varies.</div>
+    <table class="items"><thead><tr><th>Service name</th><th style="width:150px">Type</th><th style="width:130px" class="num">Default price</th><th style="width:36px"></th></tr></thead><tbody id="svcRows"></tbody></table>
+    <div class="row-actions"><button class="btn ghost sm" onclick="addSvcRow()">Add service</button><button class="btn" onclick="saveServices()">Save service list</button></div>
   </div>
 
   <div class="card no-print">
@@ -392,15 +402,6 @@
       <div class="field"><label>AI model (advanced — leave as default)</label><input id="sGeminiModel" placeholder="gemini-flash-latest"></div>
     </div>
     <div class="hint" style="margin-top:8px">Get a free key at <b>aistudio.google.com</b> → “Get API key”. It’s free, used only for the Improve-writing button, and needs internet when used. If you see a “quota/limit” error, wait a few minutes for a new key to activate, or try another model here (e.g. <code>gemini-2.0-flash</code> or <code>gemini-flash-latest</code>).</div>
-  </div>
-
-  <div class="card no-print"><div class="row-actions"><button class="btn" onclick="saveSettings()"><span data-ic="save"></span> Save all settings</button></div></div>
-
-  <div class="card no-print">
-    <h2>Service / price list</h2>
-    <div class="hint" style="margin-bottom:14px">Common jobs. These show up in the <b>Quick add</b> dropdown on the invoice. Leave price blank if it varies.</div>
-    <table class="items"><thead><tr><th>Service name</th><th style="width:150px">Type</th><th style="width:130px" class="num">Default price</th><th style="width:36px"></th></tr></thead><tbody id="svcRows"></tbody></table>
-    <div class="row-actions"><button class="btn ghost sm" onclick="addSvcRow()">Add service</button><button class="btn" onclick="saveServices()">Save service list</button></div>
   </div>
 
   <div class="card no-print">
@@ -560,7 +561,7 @@ const DEFAULTS={
   smtpHost:'smtp.gmail.com', smtpPort:'465', smtpUser:'', smtpPass:'', smtpFrom:'',
   geminiKey:'', geminiModel:'gemini-flash-latest',
   emailSubj:'Your invoice from {company} — {invoice}',
-  emailBody:'Hi {name},\n\nThank you for trusting {company} with your vehicle. Your invoice ({invoice}) for {total} is attached to this email as a PDF for your records.\n\nThe work carried out and any parts used are itemized on the invoice. If you have any questions about the service, or notice anything that needs a second look, please reply to this email or call us at {phone} — we\'re happy to help.\n\nWe appreciate your business and look forward to keeping your vehicle running safely.\n\nBest regards,\n{company}',
+  emailBody:'Hi {name},\n\nThank you for choosing {company} for your vehicle — we truly appreciate your business and the trust you\'ve placed in our shop.\n\nYour invoice ({invoice}) for {total} is attached to this email as a PDF. Please keep it for your records; it also serves as your proof of the work performed and covers the warranty on the parts and labour we provided.\n\nEverything we carried out, along with any parts used, is itemized on the invoice so you can see exactly what was done. If you have any questions about the service, would like any of the work explained in more detail, or notice anything that doesn\'t feel right after your visit, please don\'t hesitate to reply to this email or call us at {phone} — we\'re always happy to help.\n\nWe stand behind our work and want to make sure both you and your vehicle are well taken care of. Thank you again for your business, and we look forward to keeping your vehicle running safely for many kilometres to come.\n\nWarm regards,\n{company}\n{phone}',
   nextNo:1001, invPrefix:'INV', lastBackup:'', backupFolder:'',
   services:[
     {name:'Oil change (synthetic)', type:'Labor (flat)', price:''},
@@ -894,30 +895,41 @@ function setBtnBusy(btn,busy){
   if(busy){ btn.dataset.label=btn.innerHTML; btn.disabled=true; btn.innerHTML='<span class="spin">'+ic('sparkles')+'</span> Rewriting…'; }
   else if(btn.dataset.label){ btn.innerHTML=btn.dataset.label; btn.disabled=false; delete btn.dataset.label; }
 }
-function streamImprove(target, kind, btn){
+function streamImprove(target, kind, btn, inputText){
   if(!target) return;
-  const original=(target.value||'').trim();
+  const original=(inputText!=null?inputText:(target.value||'')).trim();
   if(!original){ toast('Type something first.','err'); return; }
   const s=getSettings();
   if(!(window.adtAI && window.adtAI.improve)){ alert('The AI helper runs in the installed desktop version of the app.'); return; }
   if(!s.geminiKey){ toast('Add your free Gemini API key in Settings → AI note helper first.','err'); switchTab('settings'); return; }
   initAIStream();
+  const restoreVal=target.value;   // restore prior content on failure
   const reqId='r'+Date.now()+'_'+Math.floor(performance.now());
   __aiReqId=reqId; __aiTarget=target; __aiFirst=true; __aiBtn=btn;
   setBtnBusy(btn,true);
-  target.value='✨ Rewriting…'; target.classList.add('ai-busy');   // visible "working" state until first words arrive
-  toast('AI is rewriting…');
+  target.value='✨ Writing…'; target.classList.add('ai-busy');   // visible "working" state until first words arrive
+  toast('AI is writing…');
   window.adtAI.improve({apiKey:s.geminiKey, model:s.geminiModel, text:original, kind:kind, reqId:reqId})
     .then(function(r){
       if(reqId!==__aiReqId) return; // a newer request took over
       target.classList.remove('ai-busy'); setBtnBusy(btn,false);
-      if(r&&r.ok&&r.text){ target.value=r.text; markDirty(); toast('Improved','ok'); }
-      else { target.value=original; toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); }
+      if(r&&r.ok&&r.text){ target.value=r.text; markDirty(); toast('Done','ok'); }
+      else { target.value=restoreVal; toast('AI failed: '+((r&&r.error)||'unknown error'),'err'); }
     })
-    .catch(function(err){ if(reqId===__aiReqId){ target.classList.remove('ai-busy'); setBtnBusy(btn,false); target.value=original; } toast('AI failed: '+err,'err'); });
+    .catch(function(err){ if(reqId===__aiReqId){ target.classList.remove('ai-busy'); setBtnBusy(btn,false); target.value=restoreVal; } toast('AI failed: '+err,'err'); });
 }
 function improveNote(){ streamImprove($('notes'), 'note', (typeof event!=='undefined'&&event&&event.target)?event.target.closest('button'):null); }
 function improveField(btn){ streamImprove(btn.parentElement.querySelector('input.i-desc'), 'line', btn); }
+// Draft the Notes automatically from the Parts & Labour lines
+function draftNoteFromItems(){
+  const items=[...document.querySelectorAll('#itemRows tr')].map(tr=>({
+    type:tr.querySelector('.i-type').value, desc:(tr.querySelector('.i-desc').value||'').trim()
+  })).filter(i=>i.desc);
+  if(!items.length){ toast('Add parts/labour with descriptions first.','err'); return; }
+  const listText=items.map(i=>'- '+i.desc+(String(i.type).indexOf('Part')===0?' (part)':' (labour)')).join('\n');
+  const btn=(typeof event!=='undefined'&&event&&event.target)?event.target.closest('button'):null;
+  streamImprove($('notes'), 'draft', btn, listText);
+}
 function sendTestEmail(){
   const b=mailBridge(), s=getSettings();
   if(!b || !b.test){ alert('The test send runs in the installed desktop version. It sends a test email to '+(s.smtpUser||'your Gmail')+' so you can confirm the connection works.'); return; }
@@ -974,7 +986,7 @@ function renderHistory(){
   $('histRows').innerHTML=filtered.map(d=>{
     const veh=[d.veh.year,d.veh.make,d.veh.model].filter(Boolean).join(' ')||'—';
     const dt=d.date?new Date(d.date+'T00:00').toLocaleDateString('en-CA'):'';
-    return `<tr><td><b>#${esc(d.invNo)}</b></td><td>${esc(dt)}</td>
+    return `<tr><td style="white-space:nowrap"><b>#${esc(d.invNo)}</b></td><td>${esc(dt)}</td>
       <td>${esc(d.cust.name||'—')}${d.cust.phone?'<br><span style="color:#888;font-size:12px">'+esc(d.cust.phone)+'</span>':''}</td>
       <td>${esc(veh)}${d.veh.plate?'<br><span style="color:#888;font-size:12px">'+esc(d.veh.plate)+'</span>':''}</td>
       <td class="num">${money(d.total)}</td>
