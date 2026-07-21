@@ -1,0 +1,53 @@
+{
+  "name": "adt-invoice-generator",
+  "version": "1.0.0",
+  "description": "AD&T General Auto Repair - Invoice Generator",
+  "author": "AD&T General Auto Repair",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.adt.invoicegenerator",
+    "productName": "AD&T Invoice Generator",
+    "afterPack": "./afterPack.js",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "adtautorepair",
+        "repo": "adt-invoice-generator"
+      }
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "invoice-generator.html",
+      "build/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AD&T Invoice Generator"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "nodemailer": "^6.9.16"
+  }
+}
