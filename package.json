@@ -34,6 +34,7 @@
       "signAndEditExecutable": false
     },
     "nsis": {
+      "artifactName": "adt-invoice-generator-setup-${version}.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
