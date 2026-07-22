@@ -83,7 +83,7 @@ async function renderPdfBuffer(html) {
     return await w.webContents.printToPDF({
       printBackground: true,
       pageSize: 'Letter',
-      margins: { marginType: 'custom', top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 }
+      margins: { marginType: 'custom', top: 0.4, bottom: 0.35, left: 0.5, right: 0.5 }
     });
   } finally { cleanupHiddenWindow(w); }
 }
