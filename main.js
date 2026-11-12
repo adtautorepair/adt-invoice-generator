@@ -171,7 +171,8 @@ ipcMain.handle('mail:send', async (e, o) => {
 /* ---------- AI note helper (Google Gemini free tier) ---------- */
 async function callGemini(apiKey, model, prompt) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(apiKey);
-  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } };
+  // thinkingBudget:0 turns off the model's slow "reasoning" step so it answers instantly (these are short rewrites).
+  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } } };
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   return { res, data };
@@ -192,7 +193,8 @@ async function pickModel(apiKey) {
 // Stream a Gemini response, calling onDelta(text) for each chunk as it arrives.
 async function streamGemini(apiKey, model, prompt, onDelta) {
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':streamGenerateContent?alt=sse&key=' + encodeURIComponent(apiKey);
-  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3 } };
+  // thinkingBudget:0 turns off the model's slow "reasoning" step so streaming starts right away.
+  const body = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } } };
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   if (!res.ok) { const data = await res.json().catch(() => ({})); return { ok: false, res, data }; }
   const reader = res.body.getReader();
@@ -231,7 +233,8 @@ ipcMain.handle('ai:improve', async (e, o) => {
       ? 'You are a service writer at a Canadian auto repair shop. Rewrite the rough text into a short, professional invoice line-item description (a brief phrase in title style, not a full sentence), using standard automotive service terminology and correct Canadian English. Include only what is mentioned; do not invent parts, quantities, or details. Return only the phrase, no quotation marks or preamble.\n\nExample:\nInput: chang oil\nOutput: Synthetic oil change\n\nExample:\nInput: frunt brake pad\nOutput: Front brake pad replacement\n\nNow rewrite this line item:\n' + o.text
       : 'You are a professional service writer at a Canadian auto repair shop. Rewrite the technician\'s rough note into a clear, concise, professional work description for a customer invoice. Use standard automotive service language, correct Canadian English, past tense, proper capitalization and punctuation, and industry-standard phrasing (Replaced, Performed, Installed, Inspected, Diagnosed, etc.). Include only the work and parts actually mentioned — do not invent details, quantities, prices, or recommendations. Keep it professional and to the point. Return only the rewritten description, with no preamble, labels, or quotation marks.\n\nExample:\nInput: customr make changes to oil and change 3 winder tires\nOutput: Performed oil change service and replaced 3 winter tires.\n\nNow rewrite this note:\n' + o.text;
     const onDelta = (d) => { try { e.sender.send('ai:chunk', { reqId: o.reqId, delta: d }); } catch (_) {} };
-    let model = (o.model && String(o.model).trim()) || 'gemini-flash-latest';
+    let model = (o.model && String(o.model).trim()) || 'gemini-flash-lite-latest';
+    if (model === 'gemini-flash-latest') model = 'gemini-flash-lite-latest'; // upgrade old default to the faster Flash-Lite
     let r = await streamGemini(o.apiKey, model, prompt, onDelta);
     // If the chosen model is retired/unavailable, auto-discover a working one and retry once.
     if (!r.ok && /not found|not available|no longer available|not supported|unsupported/i.test(JSON.stringify(r.data || {}))) {
